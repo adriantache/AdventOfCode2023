@@ -21,7 +21,7 @@ fun main() {
     println(result2)
 }
 
-data class Game(
+private data class Game(
     val id: Int,
     val steps: List<GameStep>,
 ) {
@@ -43,7 +43,7 @@ data class Game(
     }
 }
 
-data class GameStep(
+private data class GameStep(
     val red: Int,
     val green: Int,
     val blue: Int,
