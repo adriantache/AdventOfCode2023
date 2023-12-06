@@ -1,7 +1,6 @@
 package aoc23
 
 import kotlinx.coroutines.*
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 
 fun main() {
@@ -18,38 +17,49 @@ fun main() {
     val humidityToLocation = Ranges.fromString(processInputString(input, "humidity-to-location map:"))
 
     val min = AtomicLong(Long.MAX_VALUE)
-    val jobs = ConcurrentLinkedQueue<Deferred<Unit>>()
+    val jobs = mutableListOf<Deferred<Unit>>()
+    val startTime = System.currentTimeMillis()
 
     for (i in seeds.indices step 2) {
         val startNumber = seeds[i]
         val rangeLength = seeds[i + 1]
 
-        jobs += CoroutineScope(Dispatchers.Default).async {
-            for (seed in startNumber until startNumber + rangeLength) {
-                val location = findLocation(
-                    seed,
-                    seedToSoil,
-                    soilToFertilizer,
-                    fertilizerToWater,
-                    waterToLight,
-                    lightToTemperature,
-                    temperatureToHumidity,
-                    humidityToLocation,
-                )
+        val fullRange = (startNumber until startNumber + rangeLength step 50000).toList()
 
-                if (min.get() > location) {
-                    min.set(location)
+        for (j in fullRange.indices) {
+            if (j == fullRange.size - 1) continue
+
+            val start = fullRange[j]
+            val end = fullRange[j + 1]
+
+            jobs += CoroutineScope(Dispatchers.Default).async {
+                for (seed in start..end) {
+                    val location = findLocation(
+                        seed,
+                        seedToSoil,
+                        soilToFertilizer,
+                        fertilizerToWater,
+                        waterToLight,
+                        lightToTemperature,
+                        temperatureToHumidity,
+                        humidityToLocation,
+                    )
+
+                    if (min.get() > location) {
+                        min.set(location)
+                    }
                 }
 
-                val progress = ((seed.toDouble() - startNumber) / rangeLength * 10000).toInt() / 100f
-                println("($progress%) Processed seed $seed, got location $location. (min = $min)")
+                println("Finished batch $start .. $end.")
             }
         }
     }
 
     runBlocking {
         jobs.awaitAll()
-        println("Result: $min")
+        val endTime = System.currentTimeMillis()
+        val duration = (endTime - startTime) / 1000
+        println("Result: $min (Done in $duration seconds.)")
     }
 }
 
