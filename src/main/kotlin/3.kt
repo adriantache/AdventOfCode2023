@@ -164,6 +164,7 @@ private const val TEST = """
 5&.
 """
 
+@Suppress("BooleanMethodIsAlwaysInverted")
 private fun validateNumber(
     numberMinI: Int,
     numberMaxI: Int,
