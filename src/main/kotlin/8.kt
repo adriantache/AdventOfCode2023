@@ -88,11 +88,11 @@ private fun countSimultaneousSteps(directions: Directions, instructions: Map<Str
             lastTime = currentTime
 
             val assumedSolution = 18_000_000_000_000L
-            val intervals = assumedSolution / reportingStep
+            val intervals = (assumedSolution - steps) / reportingStep
 
             val expected = elapsed * intervals / 1000 / 60 / 60
 
-            println("Reached $steps of 10_000_000_000_000+ in ${elapsed / 1000} sec. (expected: $expected+ hours)")
+            println("Reached $steps of 10_000_000_000_000+ in ${elapsed / 1000} sec. ($expected+ hours left)")
         }
     }
 
