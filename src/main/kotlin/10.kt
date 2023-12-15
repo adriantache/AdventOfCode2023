@@ -1,5 +1,7 @@
 package aoc23
 
+import aoc23.Cardinal.*
+
 fun main() {
     val input = INPUT.split("\n").filterNot { it.isBlank() }
         .map { row ->
@@ -9,39 +11,35 @@ fun main() {
 
     val startY = input.indexOfFirst { it.contains("S") }
     val startX = input[startY].indexOf("S")
-    println("$startX $startY")
+    println("Found start: $startX $startY")
 
-    val steps = findFirstDirection(input, startX, startY)
-    println(steps)
-    println("Result 1: ${(steps + 1) / 2}")
+    var x = startX
+    var y = startY
+    val firstDirection = findFirstDirection(input, startX, startY)
+    var steps = 0 // start at 0 since we also count the last step
+    var nextCardinal: Cardinal? = firstDirection.pipe.output
+
+    println(firstDirection)
+
+    while (nextCardinal != null) {
+        val result = followPipe(x, y, nextCardinal, input)
+        nextCardinal = result?.nextCardinal
+        steps++
+
+        if (result != null) {
+            x = result.x
+            y = result.y
+        }
+    }
+
+    println("Result 1: $steps ${steps / 2}")
 }
 
 private fun findFirstDirection(
     input: List<List<String>>,
     startX: Int,
     startY: Int,
-): Int {
-    val firstDirection = searchAround(input, startX, startY)!!
-
-    println("First step $firstDirection")
-
-    var steps = 1 // We've already taken the first step.
-    var nextDirection = firstDirection
-
-    while (input[nextDirection.nextX][nextDirection.nextY] != "S") {
-        nextDirection = getNextResult(input, nextDirection)
-        println("Next step: $nextDirection")
-        steps++
-    }
-
-    return steps
-}
-
-private fun searchAround(
-    input: List<List<String>>,
-    startX: Int,
-    startY: Int,
-): SearchResult? {
+): Direction {
     val allDirections = Direction.allDirections
 
     val minX = (startX - 1).coerceAtLeast(0)
@@ -52,91 +50,139 @@ private fun searchAround(
 
     for (x in minX..maxX) {
         for (y in minY..maxY) {
+            // Skip diagonals
+            if (inCorner(x, y, minX, maxX, minY, maxY)) continue
+
             val symbol = input[y][x]
 
             if (symbol !in allDirections.keys) continue
 
             val direction = allDirections[symbol]!!
-            val diffX1 = direction.pointA.xModifier + x
-            val diffY1 = direction.pointA.yModifier + y
+            val targetDirection = Cardinal.fromRelativeCoordinates(x - minX, y - minY)
 
-            val diffX2 = direction.pointB.xModifier + x
-            val diffY2 = direction.pointB.yModifier + y
+            if (direction.pipe.input == targetDirection.reverse) {
+                return direction
+            }
 
-            val firstPointMatches = diffX1 == startX && diffY1 == startY
-            val secondPointMatches = diffX2 == startX && diffY2 == startY
-            if (firstPointMatches || secondPointMatches) {
-                val modifier = if (firstPointMatches) direction.pointB else direction.pointA
-
-                val foundX = x + modifier.xModifier
-                val foundY = y + modifier.yModifier
-
-                return SearchResult(
-                    direction = direction,
-                    directionX = x,
-                    directionY = y,
-                    nextX = foundX,
-                    nextY = foundY,
-                )
+            val reverseDirection = direction.reverse
+            if (reverseDirection.pipe.input == targetDirection.reverse) {
+                return reverseDirection
             }
         }
     }
 
-    return null
+    throw IllegalArgumentException("Cannot find first direction!")
 }
 
-private fun getNextResult(
-    input: List<List<String>>,
-    searchResult: SearchResult,
-): SearchResult {
-    val allDirections = Direction.allDirections
+private fun inCorner(x: Int, y: Int, minX: Int, maxX: Int, minY: Int, maxY: Int): Boolean {
+    val absoluteX = x - minX
+    val absoluteY = y - minY
 
-    val nextDirection = input[searchResult.nextY][searchResult.nextX]
-    val direction = allDirections[nextDirection]!!
+    val topLeft = absoluteX == 0 && absoluteY == 0
+    val topRight = absoluteX == (maxX - minX) && absoluteY == 0
+    val bottomLeft = absoluteX == 0 && absoluteY == (maxY - minY)
+    val bottomRight = absoluteX == (maxX - minX) && absoluteY == (maxY - minY)
 
-    val conditionX = direction.pointA.xModifier + searchResult.nextX == searchResult.directionX
-    val conditionY = direction.pointA.yModifier + searchResult.nextY == searchResult.directionY
-
-    val nextPoint = if (conditionX && conditionY) direction.pointB else direction.pointA
-    val foundX = searchResult.nextX + nextPoint.xModifier
-    val foundY = searchResult.nextY + nextPoint.yModifier
-
-    return SearchResult(direction, searchResult.nextX, searchResult.nextY, foundX, foundY)
+    return topLeft || topRight || bottomLeft || bottomRight
 }
 
-private data class SearchResult(
-    val direction: Direction,
-    val directionX: Int,
-    val directionY: Int,
-    val nextX: Int,
-    val nextY: Int,
-) {
-    override fun toString(): String {
-        return "From $directionX, $directionY -> found ${direction.symbol} at $nextX, $nextY"
+private fun followPipe(x: Int, y: Int, cardinal: Cardinal, input: List<List<String>>): PipeResult? {
+    val modifier = cardinal.relativeCoordinates
+    val resultX = x + modifier.first
+    val resultY = y + modifier.second
+
+    val nextPipe = input[resultY][resultX]
+
+    if (nextPipe == "S") return null
+
+    val direction = Direction.allDirections[nextPipe]!!
+
+    val nextCardinal = if (direction.pipe.input == cardinal.reverse) {
+        direction.pipe.output
+    } else {
+        direction.reverse.pipe.output
     }
+
+    return PipeResult(
+        x = resultX,
+        y = resultY,
+        nextCardinal = nextCardinal,
+    )
 }
+
+private data class PipeResult(
+    val x: Int,
+    val y: Int,
+    val nextCardinal: Cardinal,
+)
 
 private data class Direction(
     val symbol: String,
-    val pointA: Point,
-    val pointB: Point,
+    val pipe: Pipe,
 ) {
+    val reverse
+        get() = Direction(symbol, pipe.reverse)
+
     companion object {
         val allDirections = listOf(
-            Direction("|", Point(0, -1), Point(0, 1)),
-            Direction("-", Point(-1, 0), Point(1, 0)),
-            Direction("L", Point(0, -1), Point(1, 0)),
-            Direction("J", Point(-1, 0), Point(0, -1)),
-            Direction("7", Point(-1, 0), Point(0, 1)),
-            Direction("F", Point(0, 1), Point(1, 0)),
+            Direction("|", Pipe(N, S)),
+            Direction("-", Pipe(E, W)),
+            Direction("L", Pipe(N, E)),
+            Direction("J", Pipe(N, W)),
+            Direction("7", Pipe(W, S)),
+            Direction("F", Pipe(E, S)),
         ).associateBy { it.symbol }
     }
 }
 
-private data class Point(
-    val xModifier: Int,
-    val yModifier: Int,
-)
+private data class Pipe(
+    val input: Cardinal,
+    val output: Cardinal,
+) {
+    val reverse
+        get() = Pipe(input = output, output = input)
+}
+
+private sealed class Cardinal {
+    abstract val reverse: Cardinal
+    abstract val relativeCoordinates: Pair<Int, Int>
+
+    override fun toString(): String {
+        return this::class.simpleName ?: super.toString()
+    }
+
+    object N : Cardinal() {
+        override val reverse: Cardinal = S
+        override val relativeCoordinates: Pair<Int, Int> = 0 to -1
+    }
+
+    object E : Cardinal() {
+        override val reverse: Cardinal = W
+        override val relativeCoordinates: Pair<Int, Int> = 1 to 0
+    }
+
+    object S : Cardinal() {
+        override val reverse: Cardinal = N
+        override val relativeCoordinates: Pair<Int, Int> = 0 to 1
+    }
+
+    object W : Cardinal() {
+        override val reverse: Cardinal = E
+        override val relativeCoordinates: Pair<Int, Int> = -1 to 0
+    }
+
+    companion object {
+        fun fromRelativeCoordinates(x: Int, y: Int): Cardinal {
+            return when {
+                x == 1 && y == 0 -> N
+                x == 0 && y == 1 -> W
+                x == 2 && y == 1 -> E
+                x == 1 && y == 2 -> S
+                else -> throw IllegalArgumentException("Invalid coordinates: $x $y")
+            }
+        }
+    }
+}
 
 private const val TEMP = """
 .....
